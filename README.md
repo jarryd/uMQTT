@@ -41,7 +41,7 @@ Next, run main.py in python 2.4:
 * MQTT client object
 * Callback functions
 
-"""python
+'''python
 import paho.mqtt.client as mqtt
 
 # The callback for when the client receives a CONNACK response from the server.
@@ -66,4 +66,4 @@ client.connect("iot.eclipse.org", 1883, 60)
 # Other loop*() functions are available that give a threaded interface and a
 # manual interface.
 client.loop_forever()
-"""
+'''
