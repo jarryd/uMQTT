@@ -23,7 +23,6 @@ import socket
 import time
 
 # Custom modules
-
 import uMQTT
 
 #=========================================================================================
@@ -37,10 +36,10 @@ if __name__ == "__main__":
     
 
     # Create connect message
-    ConnectMsg = uMQTT.Connect(clientID = "TELITTTT")
+    ConnectMsg = uMQTT.Connect(clientID = "someClientID")
                             
     # Create publish message
-    PublishMsg = uMQTT.Publish(topic = ('jarryd/test'), payload = 'Testing3', qos = 0)
+    PublishMsg = uMQTT.Publish(topic = ('testtopic/subtopic'), payload = 'Hello World!', qos = 0)
                             
     # Create disconnect message
     DisconnectMsg = uMQTT.Disconnect()
