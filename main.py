@@ -32,26 +32,21 @@ if __name__ == "__main__":
     MQTT_SERVER = "iot.eclipse.org"
     MQTT_PORT = 1883
     
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)    s.connect((MQTT_SERVER, MQTT_PORT))
+    # Create a socket connection to the server and connect to it
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
+    # Try connect to the socket
+    s.connect((MQTT_SERVER, MQTT_PORT))
 
-    # Create a connect message
-    ConnectMsg = uMQTT.connect(clientID = "someClientID")
-                            
-    # Create a publish message
-    PublishMsg = uMQTT.publish(topic = ('testtopic/subtopic'), payload = 'Hello World!', qos = 0)
-                            
-    # Create a disconnect message
-    DisconnectMsg = uMQTT.disconnect()
-
+    # Send a CONNECT message
+    s.send(uMQTT.CONNECT(clientID = "someClientID").Assemble())
+    rsps = s.recv(100)
     
-    s.send(ConnectMsg.Assemble())
-    response = s.recv(100)
-#    print ConnectMsg.ParseResponse(response)
-    # Should return ' \x02\x00\x00' if connection is accepted
-    
-    s.send(PublishMsg.Assemble())
-    
-    s.send(DisconnectMsg.Assemble())
-    
+    # Print the response message
+    print(uMQTT.CONNACK().Parse(response = rsps)[1])
         
+    # Send a PUBLISH message
+    s.send(uMQTT.PUBLISH(topic = ('testtopic/subtopic'), payload = 'Hello World!', qos = 0).Assemble())
+
+    # Send a DISCONNECT message
+    s.send(uMQTT.DISCONNECT().Assemble())

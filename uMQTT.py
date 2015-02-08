@@ -1,19 +1,20 @@
 # Message types (subset of MQTT 3.1)
-CONNECT = 0x10
-PUBLISH = 0x30
-SUBSCRIBE = 0x80
-UNSUBSCRIBE = 0xA0
-DISCONNECT = 0xE0
+MSG_CONNECT = 0x10
+MSG_CONNACK = 0x20
+MSG_PUBLISH = 0x30
+MSG_SUBSCRIBE = 0x80
+MSG_UNSUBSCRIBE = 0xA0
+MSG_DISCONNECT = 0xE0
 
 #=========================================================================================
 
 
-class connect(object):
+class CONNECT(object):
 
     def __init__(self, clientID):
         self.clientID = clientID
         
-        self.MESSAGETYPE = CONNECT
+        self.MESSAGETYPE = MSG_CONNECT
         
         self.DUP = False
         self.QoS = False
@@ -106,11 +107,48 @@ class connect(object):
 
 #-----------------------------------------------------------------------------------------
 
-class connack(object):
+class CONNACK(object):
+
+    def __init__(self):
+        self.MESSAGETYPE = MSG_CONNACK
+        self.REMAININGLENGTH = 0
+        
+        self.return_codes = {0: 'Connection Accepted',
+                             1: 'Connection Refused: unacceptable protocol version',
+                             2: 'Connection Refused: identifier rejected',
+                             3: 'Connection Refused: server unavailable',
+                             4: 'Connection Refused: bad user name or password',
+                             5: 'Connection Refused: not authorized'}
+
+    def Parse(self, response):
+        """ Parse CONNACK message"""
+        
+        if len(response) == 4:
+            """ Check that the response is the expected size (should be 2 fixed header bytes
+            and 2 variable header bytes)"""
+        
+            # Convert the hex length byte to an integer
+            self.REMAININGLENGTH = ord(response[1])
+            
+            code = ord(response[3])
+            
+            message = self.return_codes[ord(response[3])]
+            
+        else:
+            # Something is wrong...
+            code = ''
+            message = ''
+            print("ERROR: Something is wrong in the CONNACK parser. Didn't recieve the correct response size")
+
+        return code, message
+
+#-----------------------------------------------------------------------------------------
+
+class DISCONNECT(object):
 
     def __init__(self):
     
-        self.MESSAGETYPE = DISCONNECT
+        self.MESSAGETYPE = MSG_DISCONNECT
         
         self.DUP = 0
         self.QoS = 0
@@ -136,49 +174,17 @@ class connack(object):
                 
         return message
 
-#-----------------------------------------------------------------------------------------
-
-class disconnect(object):
-
-    def __init__(self):
-    
-        self.MESSAGETYPE = DISCONNECT
-        
-        self.DUP = 0
-        self.QoS = 0
-        self.retain = 0
-
-    def FixedHeader(self):
-    
-        FIXEDHEADER = self.MESSAGETYPE
-        
-        if self.DUP == 1: FIXEDHEADER = FIXEDHEADER | 0x08
-        
-        if self.QoS == 1: FIXEDHEADER = FIXEDHEADER | 0x02
-        elif self.QoS == 2: FIXEDHEADER = FIXEDHEADER | 0x04
-        elif self.QoS == 3: FIXEDHEADER = FIXEDHEADER | 0x06
-
-        if self.retain == 1: FIXEDHEADER = FIXEDHEADER | 0x01
-
-        return chr(FIXEDHEADER)
-
-    def Assemble(self):
-
-        message = (self.FixedHeader() + "\x00")
-                
-        return message
-
 
 #-----------------------------------------------------------------------------------------
 
-class publish(object):
+class PUBLISH(object):
 
     def __init__(self, topic, payload, qos):
         self.Topic = topic
         self.Payload = payload
         self.QoS = qos
         
-        self.MESSAGETYPE = PUBLISH
+        self.MESSAGETYPE = MSG_PUBLISH
         
         self.DUP = 0
         self.QoS = 0
