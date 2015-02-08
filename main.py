@@ -35,19 +35,20 @@ if __name__ == "__main__":
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)    s.connect((MQTT_SERVER, MQTT_PORT))
     
 
-    # Create connect message
-    ConnectMsg = uMQTT.Connect(clientID = "someClientID")
+    # Create a connect message
+    ConnectMsg = uMQTT.connect(clientID = "someClientID")
                             
-    # Create publish message
-    PublishMsg = uMQTT.Publish(topic = ('testtopic/subtopic'), payload = 'Hello World!', qos = 0)
+    # Create a publish message
+    PublishMsg = uMQTT.publish(topic = ('testtopic/subtopic'), payload = 'Hello World!', qos = 0)
                             
-    # Create disconnect message
-    DisconnectMsg = uMQTT.Disconnect()
+    # Create a disconnect message
+    DisconnectMsg = uMQTT.disconnect()
 
     
     s.send(ConnectMsg.Assemble())
-    data = s.recv(100)
-    print(data, hex) # Should return ' \x02\x00\x00' if connection is accepted
+    response = s.recv(100)
+#    print ConnectMsg.ParseResponse(response)
+    # Should return ' \x02\x00\x00' if connection is accepted
     
     s.send(PublishMsg.Assemble())
     

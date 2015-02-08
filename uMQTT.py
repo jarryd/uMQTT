@@ -1,4 +1,3 @@
-
 # Message types (subset of MQTT 3.1)
 CONNECT = 0x10
 PUBLISH = 0x30
@@ -9,7 +8,7 @@ DISCONNECT = 0xE0
 #=========================================================================================
 
 
-class Connect(object):
+class connect(object):
 
     def __init__(self, clientID):
         self.clientID = clientID
@@ -104,10 +103,42 @@ class Connect(object):
                     self.clientID)      
                 
         return message
-        
+
 #-----------------------------------------------------------------------------------------
 
-class Disconnect(object):
+class connack(object):
+
+    def __init__(self):
+    
+        self.MESSAGETYPE = DISCONNECT
+        
+        self.DUP = 0
+        self.QoS = 0
+        self.retain = 0
+
+    def FixedHeader(self):
+    
+        FIXEDHEADER = self.MESSAGETYPE
+        
+        if self.DUP == 1: FIXEDHEADER = FIXEDHEADER | 0x08
+        
+        if self.QoS == 1: FIXEDHEADER = FIXEDHEADER | 0x02
+        elif self.QoS == 2: FIXEDHEADER = FIXEDHEADER | 0x04
+        elif self.QoS == 3: FIXEDHEADER = FIXEDHEADER | 0x06
+
+        if self.retain == 1: FIXEDHEADER = FIXEDHEADER | 0x01
+
+        return chr(FIXEDHEADER)
+
+    def Assemble(self):
+
+        message = (self.FixedHeader() + "\x00")
+                
+        return message
+
+#-----------------------------------------------------------------------------------------
+
+class disconnect(object):
 
     def __init__(self):
     
@@ -140,7 +171,7 @@ class Disconnect(object):
 
 #-----------------------------------------------------------------------------------------
 
-class Publish(object):
+class publish(object):
 
     def __init__(self, topic, payload, qos):
         self.Topic = topic
