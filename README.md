@@ -41,8 +41,11 @@ Next, run main.py in python 2.4:
 * MQTT client object
 * Callback functions
 
+The MQTT client usage shoud resemble that of Paho. A method of integrating various transport methods will need to be designed.
+
+Paho-like client example:
 ```python
-import paho.mqtt.client as mqtt
+import uMQTT as mqtt
 
 # The callback for when the client receives a CONNACK response from the server.
 def on_connect(client, userdata, rc):
