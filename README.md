@@ -8,23 +8,20 @@ An important difference between uMQTT and other established MQTT libraries (such
 
 The current implementation supports the following command messages:
 
-* CONNECT
-* PUBLISH
-* DISCONNECT
-
-The following command messages will be added in future revisions:
-
-* CONNACK
-* PUBACK
-* PUBREC
-* PUBREL
-* PUBCOMP
-* SUBSCRIBE
-* SUBACK
-* UNSUBSCRIBE
-* UNSUBACK
-* PINGREQ
-* PINGRESP
+- [X] CONNECT
+- [ ] CONNACK
+- [X] PUBLISH
+- [ ] PUBACK
+- [ ] PUBREC
+- [ ] PUBREL
+- [ ] PUBCOMP
+- [ ] SUBSCRIBE
+- [ ] SUBACK
+- [ ] UNSUBSCRIBE
+- [ ] UNSUBACK
+- [ ] PINGREQ
+- [ ] PINGRESP
+- [X] DISCONNECT
 
 # Getting Started (Mac)
 
