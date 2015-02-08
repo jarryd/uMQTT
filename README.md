@@ -4,6 +4,8 @@ uMQTT is a lightweight MQTT library for Python. It was intended for lightweight 
 
 This implementation is based on the [MQTT V3.1 Protocol Specification.](http://public.dhe.ibm.com/software/dw/webservices/ws-mqtt/mqtt-v3r1.html)
 
+An important difference between uMQTT and other established MQTT libraries (such as [Paho](https://eclipse.org/paho/)) is that uMQTT is designed to be agnostic to the transport method (i.e.: TCP/IP, zigbee, serial, etc). It therefore only provides a suite of tools to generate and parse command messages between the client and the borker. The goal for future versions is to maintain this abstraction while adding threads to facilitate the communication in the background.
+
 The current implementation supports the following command messages:
 
 * CONNECT
