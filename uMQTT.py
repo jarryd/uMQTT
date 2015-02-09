@@ -11,6 +11,21 @@ __status__ = "Development"
 
 #=========================================================================================
 
+# To do:
+
+#   TODO
+#=========================================================================================
+
+
+# Python modules
+import socket
+
+# Third party modules
+
+# Custom modules
+
+#=========================================================================================
+
 # Message types (subset of MQTT 3.1)
 MSG_CONNECT = 0x10
 MSG_CONNACK = 0x20
@@ -31,7 +46,7 @@ MSG_DISCONNECT = 0xE0
 
 class CONNECT(object):
 
-    def __init__(self, client_id):
+    def __init__(self, client_id, keep_alive=60):
         self.clientID = client_id
         
         self.message_type = MSG_CONNECT
@@ -50,7 +65,7 @@ class CONNECT(object):
         
         self.protocol_name = "MQIsdp"
         self.protocol_version = chr(3)
-        self.keep_alive = 60
+        self.keep_alive = keep_alive
         
         # Client ID length
         self.client_id_length_MSB = chr((len(self.clientID) & 0xFF00) >> 8)
@@ -94,7 +109,7 @@ class CONNECT(object):
         return chr(header)
 
     def fixed_header_remaining_length(self):
-        remaining_length = FormatLength(len(
+        remaining_length = format_length(len(
             self.protocol_name_length_MSB +
             self.protocol_name_length_LSB +
             self.protocol_name +
@@ -228,7 +243,7 @@ class PUBLISH(object):
         return chr(header)
         
     def fixed_header_remaining_length(self):
-        remaining_length = FormatLength(len(
+        remaining_length = format_length(len(
             self.TopicLength_MSB + 
             self.TopicLength_LSB +
             self.Topic +
@@ -249,7 +264,42 @@ class PUBLISH(object):
 
 #=========================================================================================
 
-def FormatLength(length):
+class Client(object):
+    def __init__(self):
+        self.sock = ''
+
+
+    def connect(self,address="iot.eclipse.org", port=1883, keep_alive=60 ):
+        # Create a socket connection to the server and connect to it
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        # Try connect to the socket
+        self.sock.connect((address, port))
+
+        # Send a CONNECT message
+        self.sock.send(CONNECT(client_id = "someClientID", keep_alive=keep_alive).assemble())
+        rsps = self.sock.recv(100)
+
+        # Print the response message
+        print(CONNACK().parse(response = rsps)[1])
+
+        return
+
+    def disconnect(self):
+
+        self.sock.send(DISCONNECT().assemble())
+
+        return
+
+    def publish(self,topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0):
+
+        self.sock.send(PUBLISH(topic = topic, payload = payload, qos = qos).assemble())
+
+        return
+
+#=========================================================================================
+
+def format_length(length):
     remaining_length_string = ''
     while(length>0):
         digit = length % 128
@@ -258,3 +308,31 @@ def FormatLength(length):
             digit = digit | 0x80
         remaining_length_string = remaining_length_string + chr(digit)
     return remaining_length_string
+
+#=========================================================================================
+
+if __name__ == "__main__":
+
+
+    MQTT_SERVER = "iot.eclipse.org"
+    MQTT_PORT = 1883
+
+
+    # Create a socket connection to the server and connect to it
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Try connect to the socket
+    s.connect((MQTT_SERVER, MQTT_PORT))
+
+    # Send a CONNECT message
+    s.send(CONNECT(client_id = "someClientID", keep_alive=1800).assemble())
+    rsps = s.recv(100)
+
+    # Print the response message
+    print(CONNACK().parse(response = rsps)[1])
+
+    # Send a PUBLISH message
+    s.send(PUBLISH(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0).assemble())
+
+    # Send a DISCONNECT message
+    s.send(DISCONNECT().assemble())

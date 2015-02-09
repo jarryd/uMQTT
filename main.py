@@ -13,39 +13,37 @@ __status__ = "Development"
 
 # To do:
 
+#   TODO
 #=========================================================================================
 
-# Python modules
-import socket
 
-# Third party modules
+import uMQTT as mqtt
+"""
+# The callback for when the client receives a CONNACK response from the server.
+def on_connect(client, userdata, rc):
+    print("Connected with result code "+str(rc))
+    # Subscribing in on_connect() means that if we lose the connection and
+    # reconnect then subscriptions will be renewed.
+    client.subscribe("$SYS/#")
 
-# Custom modules
-import uMQTT
+# The callback for when a PUBLISH message is received from the server.
+def on_message(client, userdata, msg):
+    print(msg.topic+" "+str(msg.payload))
+"""
+client = mqtt.Client()
+"""
+client.on_connect = on_connect
+client.on_message = on_message
+"""
+client.connect(address="iot.eclipse.org", port=1883, keep_alive=60)
 
-#=========================================================================================
+# Blocking call that processes network traffic, dispatches callbacks and
+# handles reconnecting.
+# Other loop*() functions are available that give a threaded interface and a
+# manual interface.
+"""
+client.loop_forever()
+"""
 
-if __name__ == "__main__":
-
-    MQTT_SERVER = "iot.eclipse.org"
-    MQTT_PORT = 1883
-    
-    # Create a socket connection to the server and connect to it
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    # Try connect to the socket
-
-    s.connect((MQTT_SERVER, MQTT_PORT))
-
-    # Send a CONNECT message
-    s.send(uMQTT.CONNECT(client_id = "someClientID").assemble())
-    rsps = s.recv(100)
-    
-    # Print the response message
-    print(uMQTT.CONNACK().parse(response = rsps)[1])
-        
-    # Send a PUBLISH message
-    s.send(uMQTT.PUBLISH(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0).assemble())
-
-    # Send a DISCONNECT message
-    s.send(uMQTT.DISCONNECT().assemble())
+client.publish(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0)
+client.disconnect()
