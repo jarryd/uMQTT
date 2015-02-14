@@ -24,7 +24,7 @@ import time
 try:
 
     CM = mqtt.ClientManager()
-    CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=20, server="iot.eclipse.org", port=1883)
+    CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=60, server="iot.eclipse.org", port=1883)
 
     CM.start()
 

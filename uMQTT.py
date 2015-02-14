@@ -15,6 +15,7 @@ __status__ = "Development"
 
 #   TODO Relook at the 'assemble' functions in the message classes. Make a separate function for the variable headers
 #   TODO Need a script to handle connection interruptions. i.e. pause and/or buffer incoming data streams,
+#   TODO Only send PINGREQ if no message has been sent within the keep alive period
 
 #=========================================================================================
 
@@ -277,6 +278,33 @@ class PINGREQ(object):
 
 #-----------------------------------------------------------------------------------------
 
+class PINGRESP(object):
+
+    def __init__(self):
+        self.message_type = MSG_PINGRESP
+        self.remaining_length = 0
+
+    def parse(self, response):
+        """ Parse PINGRESP message"""
+
+        if len(response) == 2:
+            """ Check that the response is the expected size (should be 2 fixed header bytes
+            and 2 variable header bytes)"""
+
+            # Convert the hex length byte to an integer
+            self.remaining_length = ord(response[1])
+
+            return 1
+
+        else:
+            # Something is wrong...
+            print("Something went wrong")
+
+            return 0
+
+
+#-----------------------------------------------------------------------------------------
+
 class DISCONNECT(object):
 
     def __init__(self):
@@ -374,10 +402,12 @@ class Client(Thread):
 
     def run(self):
         if self.connected == True:
-            pass
-            #print(self.client_id + " - Main loop tick")
-            print("Blah!")
-            # TODO Generate and try send a CONNACK message here if we're connected
+            print(self.client_id+" - Sending PINGREQ")
+            self.sock.send(PINGREQ().assemble())
+            if PINGRESP().parse(self.sock.recv(100)) is 1:
+                print(self.client_id+" - PINGREP received")
+            # TODO Generate and try send a PINGREQ message here if we're connected
+
 
 
 #=========================================================================================
@@ -424,7 +454,7 @@ class ClientManager(Thread):
             # For each client, check if it's alive. If not, run it
             if not self.client_directory[my_client].isAlive():
                 if time.time() - self.sleep_directory[my_client] >= self.keep_alive_directory[my_client]:
-                    print("######################")
+                    # This section should fire at the keep_alive frequency (+- 1second)
 
                     # Reset the sleep timer in the sleep directory
                     self.sleep_directory[my_client] = time.time()
@@ -432,7 +462,7 @@ class ClientManager(Thread):
                     # Run the heartbeat script
                     self.client_directory[my_client].run()
 
-                sys.stdout.write('.')
+                #sys.stdout.write('.')
 
 
 #If the server does not receive a message from the client within one and a half times the Keep Alive time period (the client is allowed "grace" of half a time period), it disconnects the client as if the client had sent a DISCONNECT message. This action does not impact any of the client's subscriptions. See DISCONNECT for more details.
@@ -465,7 +495,7 @@ if __name__ == "__main__":
     try:
 
         CM = ClientManager()
-        CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=60, server=MQTT_SERVER, port=MQTT_PORT)
+        CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=60, server="iot.eclipse.org", port=1883)
 
         CM.start()
 
@@ -473,8 +503,8 @@ if __name__ == "__main__":
             # do some other stuff here
 
             # TODO add error handling when doing these publishes to make sure that the client id is actually in the list
-            CM.client_directory['bushveldlabs-Dev'].publish(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0)
-            time.sleep(10)
+            CM.client_directory['bushveldlabs-Dev'].publish(topic = 'testtopic/subtopic', payload = str(time.time()), qos = 0)
+            time.sleep(10) # Publish every 10 seconds
 
 
     except(KeyboardInterrupt, SystemExit):
