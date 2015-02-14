@@ -18,32 +18,23 @@ __status__ = "Development"
 
 
 import uMQTT as mqtt
-"""
-# The callback for when the client receives a CONNACK response from the server.
-def on_connect(client, userdata, rc):
-    print("Connected with result code "+str(rc))
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe("$SYS/#")
+import time
 
-# The callback for when a PUBLISH message is received from the server.
-def on_message(client, userdata, msg):
-    print(msg.topic+" "+str(msg.payload))
-"""
-client = mqtt.Client()
-"""
-client.on_connect = on_connect
-client.on_message = on_message
-"""
-client.connect(address="iot.eclipse.org", port=1883, keep_alive=60)
 
-# Blocking call that processes network traffic, dispatches callbacks and
-# handles reconnecting.
-# Other loop*() functions are available that give a threaded interface and a
-# manual interface.
-"""
-client.loop_forever()
-"""
+try:
 
-client.publish(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0)
-client.disconnect()
+    CM = mqtt.ClientManager()
+    CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=20, server="iot.eclipse.org", port=1883)
+
+    CM.start()
+
+    while True:
+        # do some other stuff here
+
+        # TODO add error handling when doing these publishes to make sure that the client id is actually in the list
+        CM.client_directory['bushveldlabs-Dev'].publish(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0)
+        time.sleep(10) # Publish every 10 seconds
+
+
+except(KeyboardInterrupt, SystemExit):
+    print("Exiting")

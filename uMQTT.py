@@ -13,12 +13,18 @@ __status__ = "Development"
 
 # To do:
 
-#   TODO
+#   TODO Relook at the 'assemble' functions in the message classes. Make a separate function for the variable headers
+#   TODO Need a script to handle connection interruptions. i.e. pause and/or buffer incoming data streams,
+
 #=========================================================================================
 
 
 # Python modules
 import socket
+from threading import Thread
+import sched, time
+import sys
+
 
 # Third party modules
 
@@ -179,38 +185,6 @@ class CONNACK(object):
 
 #-----------------------------------------------------------------------------------------
 
-class DISCONNECT(object):
-
-    def __init__(self):
-    
-        self.message_type = MSG_DISCONNECT
-        
-        self.DUP = 0
-        self.QoS = 0
-        self.retain = 0
-
-    def fixed_header(self):
-    
-        header = self.message_type
-        
-        if self.DUP == 1: header = header or 0x08
-        
-        if self.QoS == 1: header = header or 0x02
-        elif self.QoS == 2: header = header or 0x04
-        elif self.QoS == 3: header = header or 0x06
-
-        if self.retain == 1: header = header or 0x01
-
-        return chr(header)
-
-    def assemble(self):
-
-        message = (self.fixed_header() + "\x00")
-                
-        return message
-
-#-----------------------------------------------------------------------------------------
-
 class PUBLISH(object):
 
     def __init__(self, topic, payload, qos):
@@ -262,40 +236,208 @@ class PUBLISH(object):
                 
         return message
 
+#-----------------------------------------------------------------------------------------
+
+class PINGREQ(object):
+
+    def __init__(self):
+
+        self.message_type = MSG_PINGREQ
+
+        self.DUP = False
+        self.QoS = False
+        self.retain = False
+
+    def fixed_header(self):
+
+        header = self.message_type
+
+        if self.DUP == 1: header = header or 0x08
+
+        if self.QoS == 1: header = header or 0x02
+        elif self.QoS == 2: header = header or 0x04
+        elif self.QoS == 3: header = header or 0x06
+
+        if self.retain == 1: header = chr(header) or 0x01
+
+        return chr(header)
+
+    def fixed_header_remaining_length(self):
+
+        remaining_length = "\x00"
+
+        return remaining_length
+
+    def assemble(self):
+
+        message = (self.fixed_header() +
+                    self.fixed_header_remaining_length())
+
+        return message
+
+#-----------------------------------------------------------------------------------------
+
+class DISCONNECT(object):
+
+    def __init__(self):
+
+        self.message_type = MSG_DISCONNECT
+
+        self.DUP = 0
+        self.QoS = 0
+        self.retain = 0
+
+    def fixed_header(self):
+
+        header = self.message_type
+
+        if self.DUP == 1: header = header or 0x08
+
+        if self.QoS == 1: header = header or 0x02
+        elif self.QoS == 2: header = header or 0x04
+        elif self.QoS == 3: header = header or 0x06
+
+        if self.retain == 1: header = header or 0x01
+
+        return chr(header)
+
+    def assemble(self):
+
+        message = (self.fixed_header() + "\x00")
+
+        return message
+
 #=========================================================================================
 
-class Client(object):
-    def __init__(self):
+class Client(Thread):
+
+    def __init__(self, client_id):
+        ''' Constructor. '''
+        Thread.__init__(self)
+
+        print(client_id + " - Initialising")
+
+        self.client_id = client_id
+
         self.sock = ''
+        self.connected = False
 
 
     def connect(self,address="iot.eclipse.org", port=1883, keep_alive=60 ):
+
+        print(self.client_id + " - Connecting to "+str(address)+" on port "+ str(port))
+
         # Create a socket connection to the server and connect to it
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         # Try connect to the socket
-        self.sock.connect((address, port))
+        try:
+            self.sock.connect((address, port))
 
-        # Send a CONNECT message
-        self.sock.send(CONNECT(client_id = "someClientID", keep_alive=keep_alive).assemble())
-        rsps = self.sock.recv(100)
+            # Send a CONNECT messagew
+            self.sock.send(CONNECT(client_id = self.client_id, keep_alive=keep_alive).assemble())
+            rsps = self.sock.recv(100)
 
-        # Print the response message
-        print(CONNACK().parse(response = rsps)[1])
+            # Print the response message
+            response = CONNACK().parse(response = rsps)[1]
+            print(str(self.client_id)+" - "+str(response))
+
+            self.connected = True
+
+        except socket.gaierror:
+            #We couldn't make a connection
+            #raise
+            pass
+
 
         return
 
     def disconnect(self):
 
         self.sock.send(DISCONNECT().assemble())
+        self.connected = False
 
         return
 
     def publish(self,topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0):
 
-        self.sock.send(PUBLISH(topic = topic, payload = payload, qos = qos).assemble())
+        if self.connected is True:
+            print(self.client_id+" - Publishing: "+topic+"["+payload+"]")
+            try:
+                self.sock.send(PUBLISH(topic = topic, payload = payload, qos = qos).assemble())
+            except:
+                print("Broken pipe...")
+                raise
+        else:
+            print(self.client_id+" - Not connected. Publishing not possible")
 
-        return
+
+    def run(self):
+        if self.connected == True:
+            pass
+            #print(self.client_id + " - Main loop tick")
+            print("Blah!")
+            # TODO Generate and try send a CONNACK message here if we're connected
+
+
+#=========================================================================================
+
+class ClientManager(Thread):
+    """The Client Manager allows us to run multiple MQTT clients"""
+
+    def __init__(self):
+        ''' Constructor. '''
+        Thread.__init__(self)
+
+        self.update_rate=1  # 1 second should do
+        self.keep_alive_=0
+        self.scheduler = sched.scheduler(time.time, time.sleep)
+        self.client_directory = {} # This is an array of all our classes
+        self.keep_alive_directory = {} # This is an array of all our classes
+        self.sleep_directory = {} # This stores the last time that the class executed
+
+    def create_client(self, client_id, server, port, keep_alive=60):
+
+        # Add the new client to the clients dictionary
+        self.client_directory[client_id] = Client(client_id=client_id)
+        self.client_directory[client_id].setDaemon(True)
+        self.client_directory[client_id].connect(address=server, port=port, keep_alive=keep_alive)
+
+        self.keep_alive_directory[client_id] = keep_alive
+        self.sleep_directory[client_id] = time.time()
+
+        self.client_directory[client_id].start()
+        print(client_id+" - Client created")
+
+#        self.client_list.remove(client_id)
+
+    def run(self):
+
+        self.scheduler.enter(self.update_rate, 1, self.heartbeat, ())
+        self.scheduler.run()
+        # We go to an endless loop of heartbeat() running at the update_rate
+
+    def heartbeat(self):
+        self.scheduler.enter(self.update_rate, 1, self.heartbeat, ())
+
+        for my_client in self.client_directory:
+            # For each client, check if it's alive. If not, run it
+            if not self.client_directory[my_client].isAlive():
+                if time.time() - self.sleep_directory[my_client] >= self.keep_alive_directory[my_client]:
+                    print("######################")
+
+                    # Reset the sleep timer in the sleep directory
+                    self.sleep_directory[my_client] = time.time()
+
+                    # Run the heartbeat script
+                    self.client_directory[my_client].run()
+
+                sys.stdout.write('.')
+
+
+#If the server does not receive a message from the client within one and a half times the Keep Alive time period (the client is allowed "grace" of half a time period), it disconnects the client as if the client had sent a DISCONNECT message. This action does not impact any of the client's subscriptions. See DISCONNECT for more details.
+
+#If a client does not receive a PINGRESP message within a Keep Alive time period after sending a PINGREQ, it should close the TCP/IP socket connection.
 
 #=========================================================================================
 
@@ -317,22 +459,23 @@ if __name__ == "__main__":
     MQTT_SERVER = "iot.eclipse.org"
     MQTT_PORT = 1883
 
+    import time
 
-    # Create a socket connection to the server and connect to it
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    # Try connect to the socket
-    s.connect((MQTT_SERVER, MQTT_PORT))
+    try:
 
-    # Send a CONNECT message
-    s.send(CONNECT(client_id = "someClientID", keep_alive=1800).assemble())
-    rsps = s.recv(100)
+        CM = ClientManager()
+        CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=60, server=MQTT_SERVER, port=MQTT_PORT)
 
-    # Print the response message
-    print(CONNACK().parse(response = rsps)[1])
+        CM.start()
 
-    # Send a PUBLISH message
-    s.send(PUBLISH(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0).assemble())
+        while True:
+            # do some other stuff here
 
-    # Send a DISCONNECT message
-    s.send(DISCONNECT().assemble())
+            # TODO add error handling when doing these publishes to make sure that the client id is actually in the list
+            CM.client_directory['bushveldlabs-Dev'].publish(topic = 'testtopic/subtopic', payload = 'Hello World!', qos = 0)
+            time.sleep(10)
+
+
+    except(KeyboardInterrupt, SystemExit):
+        print("Exiting")
