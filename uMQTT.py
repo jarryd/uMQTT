@@ -15,7 +15,7 @@ __status__ = "Development"
 
 #   TODO Relook at the 'assemble' functions in the message classes. Make a separate function for the variable headers
 #   TODO Need a script to handle connection interruptions. i.e. pause and/or buffer incoming data streams,
-#   TODO Only send PINGREQ if no message has been sent within the keep alive period
+#   TODO If a PINRESP is not recieved withing the keep alive period, we're disconnected
 
 #=========================================================================================
 
@@ -45,8 +45,8 @@ MSG_SUBSCRIBE = 0x80    # TODO
 MSG_SUBACK = 0x90       # TODO
 MSG_UNSUBSCRIBE = 0xA0  # TODO
 MSG_UNSUBACK = 0xB0     # TODO
-MSG_PINGREQ = 0xC0      # TODO
-MSG_PINGRESP = 0xD0     # TODO
+MSG_PINGREQ = 0xC0
+MSG_PINGRESP = 0xD0
 MSG_DISCONNECT = 0xE0
 
 #=========================================================================================
@@ -263,7 +263,8 @@ class PINGREQ(object):
 
         return chr(header)
 
-    def fixed_header_remaining_length(self):
+    @staticmethod
+    def fixed_header_remaining_length():
 
         remaining_length = "\x00"
 
@@ -302,7 +303,6 @@ class PINGRESP(object):
 
             return 0
 
-
 #-----------------------------------------------------------------------------------------
 
 class DISCONNECT(object):
@@ -337,10 +337,22 @@ class DISCONNECT(object):
 
 #=========================================================================================
 
+def format_length(length):
+    remaining_length_string = ''
+    while length>0 :
+        digit = length % 128
+        length /= 128
+        if length>0:
+            digit |= 0x80
+        remaining_length_string += chr(digit)
+    return remaining_length_string
+
+#=========================================================================================
+
 class Client(Thread):
 
     def __init__(self, client_id):
-        ''' Constructor. '''
+        # Constructor.
         Thread.__init__(self)
 
         print(client_id + " - Initialising")
@@ -350,10 +362,15 @@ class Client(Thread):
         self.sock = ''
         self.connected = False
 
+        self.keep_alive = 0
+        self.last_transmission_time = time.time()
+
 
     def connect(self,address="iot.eclipse.org", port=1883, keep_alive=60 ):
 
         print(self.client_id + " - Connecting to "+str(address)+" on port "+ str(port))
+
+        self.keep_alive = keep_alive
 
         # Create a socket connection to the server and connect to it
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -363,19 +380,21 @@ class Client(Thread):
             self.sock.connect((address, port))
 
             # Send a CONNECT messagew
-            self.sock.send(CONNECT(client_id = self.client_id, keep_alive=keep_alive).assemble())
+            self.sock.send(CONNECT(client_id = self.client_id, keep_alive=self.keep_alive).assemble())
             rsps = self.sock.recv(100)
 
             # Print the response message
             response = CONNACK().parse(response = rsps)[1]
             print(str(self.client_id)+" - "+str(response))
+            # TODO this should rather execute only if the parsed message is correct
+            self.last_transmission_time = time.time()
 
             self.connected = True
 
         except socket.gaierror:
             #We couldn't make a connection
-            #raise
-            pass
+            print("Got a problem here")
+
 
 
         return
@@ -393,6 +412,8 @@ class Client(Thread):
             print(self.client_id+" - Publishing: "+topic+"["+payload+"]")
             try:
                 self.sock.send(PUBLISH(topic = topic, payload = payload, qos = qos).assemble())
+                self.last_transmission_time = time.time()
+
             except:
                 print("Broken pipe...")
                 raise
@@ -401,14 +422,24 @@ class Client(Thread):
 
 
     def run(self):
-        if self.connected == True:
-            print(self.client_id+" - Sending PINGREQ")
-            self.sock.send(PINGREQ().assemble())
-            if PINGRESP().parse(self.sock.recv(100)) is 1:
-                print(self.client_id+" - PINGREP received")
-            # TODO Generate and try send a PINGREQ message here if we're connected
+        if self.connected:
 
+            # If we haven't transmitted a message within the keep alive time, send a PINGREQ
+            if time.time() - self.last_transmission_time>self.keep_alive:
+                print(self.client_id+" - Sending PINGREQ")
 
+                try:
+                    # Send PINGREQ message
+                    self.sock.send(PINGREQ().assemble())
+                    self.last_transmission_time = time.time()
+                    resp = self.sock.recv(self.keep_alive)
+                    self.last_transmission_time = time.time()
+                except:
+                    raise
+
+                #Generate and try send a PINGREQ message here if we're connected
+                if PINGRESP().parse(resp) is 1:
+                    print(self.client_id+" - PINGREP received")
 
 #=========================================================================================
 
@@ -416,7 +447,7 @@ class ClientManager(Thread):
     """The Client Manager allows us to run multiple MQTT clients"""
 
     def __init__(self):
-        ''' Constructor. '''
+        # Constructor.
         Thread.__init__(self)
 
         self.update_rate=1  # 1 second should do
@@ -471,19 +502,8 @@ class ClientManager(Thread):
 
 #=========================================================================================
 
-def format_length(length):
-    remaining_length_string = ''
-    while(length>0):
-        digit = length % 128
-        length = length / 128
-        if(length>0):
-            digit = digit | 0x80
-        remaining_length_string = remaining_length_string + chr(digit)
-    return remaining_length_string
-
-#=========================================================================================
-
 if __name__ == "__main__":
+
 
 
     MQTT_SERVER = "iot.eclipse.org"
@@ -495,7 +515,7 @@ if __name__ == "__main__":
     try:
 
         CM = ClientManager()
-        CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=60, server="iot.eclipse.org", port=1883)
+        CM.create_client(client_id="bushveldlabs-Dev" , keep_alive=10, server="iot.eclipse.org", port=1883)
 
         CM.start()
 
@@ -504,7 +524,7 @@ if __name__ == "__main__":
 
             # TODO add error handling when doing these publishes to make sure that the client id is actually in the list
             CM.client_directory['bushveldlabs-Dev'].publish(topic = 'testtopic/subtopic', payload = str(time.time()), qos = 0)
-            time.sleep(10) # Publish every 10 seconds
+            time.sleep(20) # Publish every 10 seconds
 
 
     except(KeyboardInterrupt, SystemExit):
